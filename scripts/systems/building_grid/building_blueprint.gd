@@ -5,22 +5,6 @@ extends Resource
 ## The script of the bonus that the building uses.
 @export var bonus: Script
 
-## The squares that make up the building, written as a "human-readable" string.
-## For example, a T-block with a 3x3 bounding box would have:
-## .O.
-## OOO
-## ...
-@export_multiline var squares: String
-
-## The coordinates of the building's center square.
-@export var center_coords: Vector2i
-
-## See the [enum Building.CenterMode] docs
-@export var center_mode: Building.CenterMode
-
-## See the [enum Building.KickMode] docs
-@export var kick_mode: Building.KickMode
-
 ## The building's name
 @export var name: String
 
@@ -39,5 +23,8 @@ extends Resource
 ## The price of this building on the day on which it can first appear.
 @export var starting_price: float
 
-## The price increase of this building per day, as a fraction of the current price.
+## The price increase of this building per day, as a percentage of the current price.
 @export var daily_increase: float
+
+## A multiplier applied to the day, whose product is added linearly to the current price.
+@export var day_multiplier: float

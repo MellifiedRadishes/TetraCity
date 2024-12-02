@@ -25,17 +25,16 @@ var _you_win: PackedScene = preload("res://scenes/menus/you_win.tscn")
 
 var _you_lose: PackedScene = preload("res://scenes/menus/you_lose.tscn")
 
+var _stats_screen: PackedScene = preload("res://scenes/menus/stats_screen.tscn")
+
 ## The amount of coins the player has.
-var coins
+var coins: int
 
 ## The amount of fuel the player has.
-var fuel
+var fuel: int
 
 ## The current day (starting from 1).
-var day
-
-## Church count
-var churches : int
+var day: int
 
 # Called when the node enters the scene tree for the first time.
 func _ready() -> void:
@@ -53,14 +52,12 @@ func init_values() -> void:
 	coins = 10
 	fuel = 60
 	day = 1
-	churches = 0
+	new_day_updates()
 
-func increment_church_count() -> void:
-	churches += 1
-	
 func end_day_button() -> void:
 	end_day()
 	top_label.update()
+	top_label.bump()
 
 ## Update the values for each day
 func end_day() -> void:
@@ -73,7 +70,9 @@ func end_day() -> void:
 		func(b: Building) -> bool:
 			return b.blueprint == _nuclear_reactor
 	):
-		LevelLoader.load_level(_you_win)
+		SavedStats.setFinalBalance(coins)
+		SavedStats.setFinalFuel(fuel)
+		LevelLoader.load_level(_stats_screen)
 
 	if fuel <= 0 and not building_grid.buildings.any(
 		func(b: Building) -> bool:
@@ -81,6 +80,9 @@ func end_day() -> void:
 	):
 		LevelLoader.load_level(_you_lose)
 
+	new_day_updates()
+
+func new_day_updates() -> void:
 	natural_disasters.on_new_day()
 	sky_view_controls.end_day()
 	building_bonuses.apply_bonuses()

@@ -29,14 +29,24 @@ const ADJACENT_VECTORS: Array[Vector2i] = [
 	Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1),
 ]
 
+const HARD_PARTICLES = preload("res://scenes/effects/particles/hard_drop.tscn")
+const SOFT_PARTICLES = preload("res://scenes/effects/particles/soft_drop.tscn")
+enum ParticleType {HARD, SOFT}
+
 ## The moving camera.
 @export var _moving_camera: MovingCamera
 
 ## The sky view controls.
 @export var _sky_view_controls: SkyViewControls
 
+## The balloon spawn AI
+@export var _balloon_spawn_ai: BalloonSpawnAI
+
 ## The world stats.
 @export var world_stats: WorldStats
+
+## Controls the pixel UI layer.
+@export var _hud_container: HudContainer
 
 ## Debug variable for what buildings can be placed when you press SPACE.
 @export var _test_variations: Array[BuildingVariation]
@@ -89,6 +99,8 @@ func start_placing(new_building: Building) -> void:
 	add_child(new_building)
 	push_timer = MAX_PUSH_TIMER
 	guide.show()
+	_moving_camera.start_placing(new_building)
+	_hud_container.hide_end_day()
 
 ## Called every frame while placing a building.
 func placing_process(delta: float) -> void:
@@ -113,6 +125,11 @@ func placing_process(delta: float) -> void:
 			continue
 		if num_drops > 0:
 			sfx.play_hard_drop()
+			_moving_camera.shake(0.2)
+		if num_drops > 3:
+			spawn_particles(ParticleType.HARD);
+			_moving_camera.shake(0.5)
+
 		push_timer = MAX_PUSH_TIMER
 
 	# Soft Drop
@@ -132,7 +149,10 @@ func placing_process(delta: float) -> void:
 			sfx.play_building_move()
 
 	# If the push timer is below zero, stop moving the building
-	push_timer -= delta
+	if world_stats.day == 1:
+		push_timer -= delta * 0.6
+	else:
+		push_timer -= delta
 	if push_timer < 0:
 		if test_move_building(placing_building, Vector2i(0, 1)):
 			sfx.play_gravity()
@@ -144,8 +164,12 @@ func placing_process(delta: float) -> void:
 ## Add the current building to the grid and rebuild its collision.
 func done_placing() -> void:
 	buildings.append(placing_building)
+	spawn_particles(ParticleType.SOFT);
 	build_grid()
 	placing_building.done_placing()
+	if placing_building.bonus is CityHall:
+		_hud_container.end_day_unlocked = true
+	_hud_container.show_end_day()
 	placing_building = null
 	_sky_view_controls.done_placing()
 	guide.hide()
@@ -180,7 +204,7 @@ func test_rotate_building(building: Building, direction: ClockDirection) -> bool
 		var t_index: int = step + building.rotation_value * 5
 		var translation: Vector2i = (
 				NORMAL_KICK_TRANSLATIONS[t_index]
-				if building.blueprint.kick_mode == Building.KickMode.NORMAL else
+				if building.variation.kick_mode == Building.KickMode.NORMAL else
 				LONG_KICK_TRANSLATIONS[t_index])
 		if direction == COUNTERCLOCKWISE:
 			translation = -translation
@@ -316,3 +340,40 @@ func test_coord_gets_sun(coord: Vector2i) -> bool:
 	else:
 		return false
 
+# Spawn those particles!
+func spawn_particles(variation: ParticleType) -> void:
+	for x in range(placing_building.grid.dimensions.x):
+		for y in range(placing_building.grid.dimensions.y):
+			var xy: Vector2i = Vector2i(x, y)
+			if placing_building.grid.at(xy) == 0:
+				continue
+			var grid_xy: Vector2i = xy + placing_building.pos_coords
+			var particle_node = (HARD_PARTICLES if variation == ParticleType.HARD else SOFT_PARTICLES).instantiate()
+			add_sibling(particle_node)
+			var particles = particle_node.get_child(0)
+			particles.global_position = top_corner_of_space(grid_xy)
+			particles.global_position += Vector2(10, 10)
+			particles.emitting = true
+
+# Destroy the list of buildings, and play the given effect. Used in natural disasters
+func destroy_buildings(to_destroy: Array[Building], effect_scene: PackedScene) -> void:
+	buildings = buildings.filter(
+		func(building: Building) -> bool:
+			return building not in to_destroy
+	)
+
+	for building: Building in to_destroy:
+		for x: int in range(building.grid.dimensions.x):
+			for y: int in range(building.grid.dimensions.y):
+				if building.grid.at(Vector2(x, y)) == 1:
+					var effect = effect_scene.instantiate()
+					add_sibling(effect)
+
+					var coords = Vector2i(x, y) + building.pos_coords
+					var top_corner = top_corner_of_space(coords)
+					effect.global_position = top_corner
+
+		building.queue_free()
+		_balloon_spawn_ai.buildings_in_world[building.blueprint] -= 1;
+
+	build_grid()
